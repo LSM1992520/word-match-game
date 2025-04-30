@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>单词消消乐</title>
+    <style>
+        body {
+            font-family: "Microsoft Yahei", Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        #game-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            margin-top: 20px;
+        }
+        .tile {
+            padding: 20px;
+            text-align: center;
+            border: 2px solid #4a4a4a;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 16px;
+            font-weight: bold;
+            user-select: none;
+        }
+        .en {
+            background-color: #a3d8f4;
+            color: #1a5276;
+        }
+        .cn {
+            background-color: #f5b7b1;
+            color: #7b241c;
+        }
+        .matched {
+            background-color: #95a5a6 !important;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        #info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 25px;
+            font-size: 18px;
+        }
+        .info-item {
+            padding: 8px 15px;
+            background-color: #f2f3f4;
+            border-radius: 5px;
+        }
+        #timer {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div class="info-item">关卡: <span id="level">1</span></div>
+        <div class="info-item">得分: <span id="score">0</span></div>
+        <div class="info-item">剩余时间: <span id="timer">90</span></div>
+    </div>
+    <div id="game-grid"></div>
+
+    <script>
+        const wordPairs = [
+            ["apple", "苹果"], ["banana", "香蕉"], ["cat", "猫"],
+            ["dog", "狗"], ["book", "书"], ["car", "汽车"],
+            ["house", "房子"], ["tree", "树"], ["water", "水"],
+            ["fire", "火"], ["sun", "太阳"], ["moon", "月亮"],
+            ["computer", "电脑"], ["phone", "手机"], ["friend", "朋友"],
+            ["school", "学校"], ["teacher", "老师"], ["student", "学生"]
+        ];
+
+        class WordMatchGame {
+            constructor() {
+                this.level = 1;
+                this.score = 0;
+                this.timeLeft = 90;
+                this.selected = [];
+                this.matched = new Set();
+                this.timerId = null;
+                this.initGame();
+            }
+
+            initGame() {
+                this.createGrid();
+                this.startTimer();
+            }
+
+            createGrid() {
+                const grid = document.getElementById("game-grid");
+                grid.innerHTML = '';
+                
+                // 生成当前关卡的单词对
+                const pairs = this.getRandomPairs(18);
+                const allWords = pairs.flatMap(([en, cn]) => [
+                    { type: 'en', text: en },
+                    { type: 'cn', text: cn }
+                ]);
+                
+                // 洗牌后创建卡片
+                this.shuffleArray(allWords).forEach((word, index) => {
+                    const tile = document.createElement('div');
+                    tile.className = `tile ${word.type}`;
+                    tile.textContent = word.text;
+                    
+                    if (this.matched.has(index)) {
+                        tile.classList.add('matched');
+                        tile.style.pointerEvents = 'none';
+                    }
+                    
+                    tile.addEventListener('click', () => this.handleTileClick(tile, index));
+                    grid.appendChild(tile);
+                });
+            }
+
+            getRandomPairs(count) {
+                return [...wordPairs]
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, count);
+            }
+
+            shuffleArray(array) {
+                return [...array].sort(() => Math.random() - 0.5);
+            }
+
+            handleTileClick(tile, index) {
+                if (this.matched.has(index) || this.selected.includes(index)) return;
+                
+                // 添加点击效果
+                tile.style.transform = 'scale(0.95)';
+                tile.style.opacity = '0.8';
+                this.selected.push(index);
+                
+                if (this.selected.length === 2) {
+                    this.checkMatch();
+                }
+            }
+
+            checkMatch() {
+                const [index1, index2] = this.selected;
+                const tiles = document.getElementsByClassName('tile');
+                const tile1 = tiles[index1];
+                const tile2 = tiles[index2];
+                
+                // 验证是否匹配
+                const isMatch = wordPairs.some(([en, cn]) => 
+                    (tile1.textContent === en && tile2.textContent === cn) ||
+                    (tile1.textContent === cn && tile2.textContent === en)
+                );
+
+                if (isMatch) {
+                    this.handleSuccess(tile1, tile2, index1, index2);
+                } else {
+                    this.handleMismatch(tile1, tile2);
+                }
+                
+                this.selected = [];
+                this.updateUI();
+            }
+
+            handleSuccess(tile1, tile2, index1, index2) {
+                this.score += 10;
+                this.matched.add(index1);
+                this.matched.add(index2);
+                
+                [tile1, tile2].forEach(tile => {
+                    tile.classList.add('matched');
+                    tile.style.pointerEvents = 'none';
+                    tile.style.transform = 'scale(1)';
+                });
+                
+                if (this.matched.size === 36) {
+                    this.levelUp();
+                }
+            }
+
+            handleMismatch(tile1, tile2) {
+                setTimeout(() => {
+                    [tile1, tile2].forEach(tile => {
+                        tile.style.transform = 'scale(1)';
+                        tile.style.opacity = '1';
+                    });
+                }, 500);
+            }
+
+            levelUp() {
+                this.level++;
+                this.timeLeft = 90;
+                this.matched.clear();
+                this.createGrid();
+                this.updateUI();
+            }
+
+            startTimer() {
+                this.timerId = setInterval(() => {
+                    this.timeLeft--;
+                    this.updateUI();
+                    
+                    if (this.timeLeft <= 0) {
+                        clearInterval(this.timerId);
+                        this.showGameOver();
+                    }
+                }, 1000);
+            }
+
+            showGameOver() {
+                alert(`游戏结束！\n最终得分: ${this.score}\n通关关卡: ${this.level}`);
+                // 重置游戏
+                this.level = 1;
+                this.score = 0;
+                this.timeLeft = 90;
+                this.matched.clear();
+                this.createGrid();
+                this.startTimer();
+                this.updateUI();
+            }
+
+            updateUI() {
+                document.getElementById('level').textContent = this.level;
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('timer').textContent = this.timeLeft;
+            }
+        }
+
+        // 初始化游戏
+        new WordMatchGame();
+    </script>
+</body>
+</html>
